@@ -546,6 +546,24 @@ struct StudentQuickActionsSection: View {
             }
 
             NavigationLink {
+                StudentLeaderboardView(token: token, currentUserID: user?.id)
+            } label: {
+                HStack {
+                    Label("Cohort Leaderboard", systemImage: "trophy.fill")
+                    Spacer()
+                    Text("Rankings")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.yellow.opacity(0.2), in: Capsule())
+                        .foregroundStyle(.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
+            }
+
+            NavigationLink {
                 MistakeVaultView(token: token)
             } label: {
                 HStack {
@@ -578,6 +596,8 @@ struct PerformanceReviewView: View {
     @State private var winRate: String = "—"
     @State private var avgSpeed: String = "—"
     @State private var mistakeCount: Int = 0
+    @State private var leaderboardEntries: [LeaderboardEntry] = []
+    @State private var showLeaderboardSheet = false
     @State private var isLoading = false
 
     var body: some View {
@@ -652,6 +672,60 @@ struct PerformanceReviewView: View {
                         )
                     }
 
+                    // MARK: - GitHub-Style Activity Heatmap
+                    GitHubActivityHeatmapView(
+                        dailyActivity: analytics?.dailyActivity ?? [:],
+                        currentStreak: analytics?.currentStreak ?? 0,
+                        longestStreak: analytics?.longestStreak ?? 0
+                    )
+
+                    // MARK: - Topic-Wise Accuracy Breakdown
+                    TopicAccuracyBreakdownView(
+                        items: TopicAccuracyItem.generateItems(
+                            weakness: analytics?.weakness,
+                            attempts: TestStore.shared.attempts,
+                            tests: TestStore.shared.tests
+                        )
+                    )
+
+                    // MARK: - Mastery Badges
+                    MasteryBadgesView(
+                        badges: MasteryBadge.generateBadges(
+                            accuracyString: accuracy,
+                            elo: analytics?.elo,
+                            streak: analytics?.currentStreak ?? 0,
+                            testsCompleted: TestStore.shared.attempts.count,
+                            mistakeCount: mistakeCount
+                        )
+                    )
+
+                    // MARK: - Cohort Leaderboard Preview
+                    LeaderboardPreviewCard(
+                        topEntries: leaderboardEntries,
+                        currentUserID: userID,
+                        onOpenFullLeaderboard: {
+                            showLeaderboardSheet = true
+                        }
+                    )
+
+                    NavigationLink {
+                        StudentLeaderboardView(token: token, currentUserID: userID)
+                    } label: {
+                        HStack {
+                            Image(systemName: "trophy.fill")
+                                .foregroundStyle(.yellow)
+                            Text("Open Full Cohort Podium & Standings")
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(.yellow.opacity(0.14), in: RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    // MARK: - Mistake Vault
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Image(systemName: "archivebox.fill")
@@ -701,6 +775,9 @@ struct PerformanceReviewView: View {
         }
         .navigationTitle("Performance")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showLeaderboardSheet) {
+            StudentLeaderboardView(token: token, currentUserID: userID)
+        }
         .task {
             if let initialAnalytics {
                 self.analytics = initialAnalytics
@@ -737,6 +814,7 @@ struct PerformanceReviewView: View {
         }
 
         if let leaderboard {
+            self.leaderboardEntries = leaderboard
             if let userID, let me = leaderboard.first(where: { $0.id == userID }) {
                 self.accuracy = me.accuracy ?? "0.0%"
                 self.winRate = me.winRate ?? "0.0%"
