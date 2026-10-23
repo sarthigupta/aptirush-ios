@@ -64,7 +64,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* Aptirush */,
-				19E8D7F5308BF14D005FDAEA /* backend */,
 			);
 			name = Aptirush;
 			productName = MyApp;

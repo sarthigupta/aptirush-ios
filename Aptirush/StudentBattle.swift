@@ -12,6 +12,13 @@ struct BattleQuestion: Identifiable, Hashable {
     let correctAnswer: String?
     let type: String?
 
+    var isTITA: Bool {
+        if let type, type.uppercased().contains("TITA") {
+            return true
+        }
+        return options.isEmpty || options.count < 2
+    }
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
@@ -28,6 +35,12 @@ struct BattleQuestion: Identifiable, Hashable {
             ?? "Aptitude Duel Question"
         let correct = (dict["correctAnswer"] as? String) ?? (dict["correct"] as? String)
         let type = dict["type"] as? String
+
+        // 1v1 Arena only permits Multiple Choice (MCQ) questions - Disallow TITA / Text inputs:
+        if let typeStr = type?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+           typeStr.contains("TITA") || typeStr == "TEXT" || typeStr == "INPUT" {
+            return nil
+        }
 
         var parsedOptions: [QuizOption] = []
         if let optDict = dict["options"] as? [String: Any] {
@@ -50,15 +63,107 @@ struct BattleQuestion: Identifiable, Hashable {
             }
         }
 
+        // In 1v1 Arena, ensure there are at least 2 selectable options (never TITA):
+        guard parsedOptions.count >= 2 else {
+            return nil
+        }
+
         return BattleQuestion(
             id: id,
             questionText: text,
             options: parsedOptions,
             correctAnswer: correct,
-            type: type
+            type: "MCQ"
         )
     }
 }
+
+let defaultMCQBattleQuestions: [BattleQuestion] = [
+    BattleQuestion(
+        id: "mcq_1",
+        questionText: "A train traveling at 72 km/h crosses a 260 m long platform in 23 seconds. What is the length of the train?",
+        options: [
+            QuizOption(id: "A", text: "200 m"),
+            QuizOption(id: "B", text: "220 m"),
+            QuizOption(id: "C", text: "240 m"),
+            QuizOption(id: "D", text: "180 m")
+        ],
+        correctAnswer: "A",
+        type: "MCQ"
+    ),
+    BattleQuestion(
+        id: "mcq_2",
+        questionText: "If 15 men can complete a project in 12 days working 8 hours a day, how many days will 18 men take working 6 hours a day?",
+        options: [
+            QuizOption(id: "A", text: "10 days"),
+            QuizOption(id: "B", text: "13.3 days"),
+            QuizOption(id: "C", text: "15 days"),
+            QuizOption(id: "D", text: "12 days")
+        ],
+        correctAnswer: "B",
+        type: "MCQ"
+    ),
+    BattleQuestion(
+        id: "mcq_3",
+        questionText: "The ratio of present ages of A and B is 3:5. After 6 years, the ratio becomes 2:3. What is B's present age?",
+        options: [
+            QuizOption(id: "A", text: "25 years"),
+            QuizOption(id: "B", text: "30 years"),
+            QuizOption(id: "C", text: "35 years"),
+            QuizOption(id: "D", text: "20 years")
+        ],
+        correctAnswer: "B",
+        type: "MCQ"
+    ),
+    BattleQuestion(
+        id: "mcq_4",
+        questionText: "A shopkeeper marks an article 40% above cost price and allows a 20% discount. What is the net profit percentage?",
+        options: [
+            QuizOption(id: "A", text: "12%"),
+            QuizOption(id: "B", text: "15%"),
+            QuizOption(id: "C", text: "20%"),
+            QuizOption(id: "D", text: "8%")
+        ],
+        correctAnswer: "A",
+        type: "MCQ"
+    ),
+    BattleQuestion(
+        id: "mcq_5",
+        questionText: "Pointing to a photograph, a woman says: 'He is the only son of my father's father.' How is the man related to the woman?",
+        options: [
+            QuizOption(id: "A", text: "Father"),
+            QuizOption(id: "B", text: "Uncle"),
+            QuizOption(id: "C", text: "Brother"),
+            QuizOption(id: "D", text: "Grandfather")
+        ],
+        correctAnswer: "A",
+        type: "MCQ"
+    ),
+    BattleQuestion(
+        id: "mcq_6",
+        questionText: "Find the next number in the series: 4, 9, 25, 49, 121, ?",
+        options: [
+            QuizOption(id: "A", text: "144"),
+            QuizOption(id: "B", text: "169"),
+            QuizOption(id: "C", text: "196"),
+            QuizOption(id: "D", text: "225")
+        ],
+        correctAnswer: "B",
+        type: "MCQ"
+    ),
+    BattleQuestion(
+        id: "mcq_7",
+        questionText: "Pipe A can fill a tank in 6 hours and Pipe B can empty it in 8 hours. If both are opened together, how long will it take to fill the tank?",
+        options: [
+            QuizOption(id: "A", text: "24 hours"),
+            QuizOption(id: "B", text: "14 hours"),
+            QuizOption(id: "C", text: "18 hours"),
+            QuizOption(id: "D", text: "12 hours")
+        ],
+        correctAnswer: "A",
+        type: "MCQ"
+    )
+]
 
 struct BattleData: Identifiable, Hashable {
     var id: String { battleId }
@@ -88,10 +193,17 @@ struct BattleData: Identifiable, Hashable {
         var qs: [BattleQuestion] = []
         if let qArray = (dict["questions"] as? [[String: Any]]) ?? (dict["battleQuestions"] as? [[String: Any]]) {
             for qDict in qArray {
-                if let q = BattleQuestion.parse(from: qDict) {
+                if let q = BattleQuestion.parse(from: qDict), !q.isTITA {
                     qs.append(q)
                 }
             }
+        }
+
+        // Ensure 1v1 duel always has at least 5 valid MCQ questions (never TITA):
+        if qs.count < 5 {
+            let needed = 5 - qs.count
+            let fallbacks = defaultMCQBattleQuestions.filter { fb in !qs.contains(where: { $0.id == fb.id }) }
+            qs.append(contentsOf: fallbacks.prefix(needed))
         }
 
         return BattleData(
@@ -741,42 +853,58 @@ final class BattleLobbyViewModel {
 
         do {
             let modules = try await APIClient.shared.studentModules(token: activeToken)
-            guard let firstMod = modules.first else {
-                errorMessage = "No learning modules available for questions."
-                isSearching = false
-                return
+
+            // Gather only non-TITA questions across available modules
+            var candidateQuestions: [QuizQuestion] = []
+            for mod in modules {
+                if let quiz = try? await APIClient.shared.moduleQuiz(id: mod.id, token: activeToken) {
+                    let nonTITA = quiz.questions.filter { q in
+                        let isTITA = (q.type?.uppercased().contains("TITA") ?? false)
+                            || q.isTextAnswer
+                            || q.options.count < 2
+                        return !isTITA
+                    }
+                    candidateQuestions.append(contentsOf: nonTITA)
+                    if candidateQuestions.count >= 10 {
+                        break
+                    }
+                }
             }
 
-            let quiz = try await APIClient.shared.moduleQuiz(id: firstMod.id, token: activeToken)
-            guard !quiz.questions.isEmpty else {
-                errorMessage = "No questions found in module."
-                isSearching = false
-                return
-            }
-
-            let selected = Array(quiz.questions.prefix(5))
-            let battleQuestions = selected.map { q in
-                BattleQuestion(
-                    id: q.id,
-                    questionText: q.text,
-                    options: q.options,
-                    correctAnswer: q.correctAnswer ?? q.options.first?.id,
-                    type: q.type
-                )
+            let selected: [BattleQuestion]
+            if !candidateQuestions.isEmpty {
+                let chosen = Array(candidateQuestions.shuffled().prefix(5))
+                selected = chosen.map { q in
+                    BattleQuestion(
+                        id: q.id,
+                        questionText: q.text,
+                        options: q.options,
+                        correctAnswer: q.correctAnswer ?? q.options.first?.id,
+                        type: "MCQ"
+                    )
+                }
+            } else {
+                selected = Array(defaultMCQBattleQuestions.shuffled().prefix(5))
             }
 
             let mockBattle = BattleData(
                 battleId: "practice_\(UUID().uuidString.prefix(8))",
                 p1Id: userId,
                 p2Id: "aptibot-ai",
-                questions: battleQuestions
+                questions: selected
             )
 
             isSearching = false
             activeBattle = mockBattle
         } catch {
-            errorMessage = "Failed to load practice questions: \(error.localizedDescription)"
+            let mockBattle = BattleData(
+                battleId: "practice_\(UUID().uuidString.prefix(8))",
+                p1Id: userId,
+                p2Id: "aptibot-ai",
+                questions: Array(defaultMCQBattleQuestions.shuffled().prefix(5))
+            )
             isSearching = false
+            activeBattle = mockBattle
         }
     }
 

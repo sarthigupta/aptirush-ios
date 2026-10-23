@@ -618,6 +618,12 @@ struct StudentTestsView: View {
             }
             .navigationTitle("Assigned Tests")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Image(systemName: "list.clipboard.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
             .fullScreenCover(item: $testToTake) { test in
                 StudentTakeTestView(
                     test: test,
@@ -644,7 +650,16 @@ struct StudentTestCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header: Title & Status
-            HStack(alignment: .top) {
+            HStack(alignment: .center, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(attempt != nil ? Color.green.opacity(0.16) : Color.orange.opacity(0.16))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: attempt != nil ? "checkmark.seal.fill" : "list.clipboard.fill")
+                        .font(.title3.bold())
+                        .foregroundStyle(attempt != nil ? Color.green : Color.orange)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(test.title)
                         .font(.headline)

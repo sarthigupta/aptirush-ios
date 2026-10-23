@@ -737,7 +737,7 @@ struct FacultyStudentDetailSheet: View {
                                 title: "Tests Completed",
                                 value: "\(student.totalTests)",
                                 subtitle: student.totalTests > 0 ? "Active practice" : "No tests yet",
-                                icon: "doc.text.badge.checkmark",
+                                icon: "list.clipboard.fill",
                                 color: .orange
                             )
                         }

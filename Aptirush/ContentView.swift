@@ -227,7 +227,7 @@ struct StudentHomeView: View {
 
             StudentTestsView(token: session.token, user: session.user)
                 .tabItem {
-                    Label("Tests", systemImage: "doc.text.badge.checkmark")
+                    Label("Tests", systemImage: "list.clipboard.fill")
                 }
                 .tag(1)
 
@@ -471,7 +471,7 @@ struct StudentQuickActionsSection: View {
                 onSelectTests?()
             } label: {
                 HStack {
-                    Label("Assigned Tests", systemImage: "doc.text.badge.checkmark")
+                    Label("Assigned Tests", systemImage: "list.clipboard.fill")
                     Spacer()
                     let pending = TestStore.shared.tests.filter { TestStore.shared.attempts[$0.id] == nil }.count
                     if pending > 0 {
