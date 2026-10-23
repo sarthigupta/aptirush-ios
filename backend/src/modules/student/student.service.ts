@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 export const StudentService = {
   async getModules(userId: string) {
     return prisma.module.findMany({
+      orderBy: { chapterNumber: 'asc' },
       include: {
         _count: {
           select: { questions: { where: { status: 'PUBLISHED' } } }

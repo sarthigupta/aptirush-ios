@@ -170,7 +170,7 @@ final class APIClient {
         for mod in custom where !existingIDs.contains(mod.id) {
             merged.append(mod)
         }
-        return merged
+        return merged.sortedSerialWise()
     }
 
     func moduleQuiz(id: String, token: String) async throws -> ModuleQuizResponse {

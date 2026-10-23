@@ -490,7 +490,8 @@ struct FacultyCreateTestSheet: View {
         isLoadingModules = true
         errorMessage = nil
         do {
-            self.modules = try await APIClient.shared.studentModules(token: token)
+            let fetched = try await APIClient.shared.studentModules(token: token)
+            self.modules = fetched.sortedSerialWise()
             if selectedModule == nil, let first = modules.first {
                 selectedModule = first
                 title = "\(first.title) Test"
@@ -780,16 +781,18 @@ struct StudentTakeTestView: View {
     @State private var currentIndex: Int = 0
     @State private var selectedAnswers: [String: String] = [:] // QuestionID : OptionID
     @State private var secondsRemaining: Int
-    @State private var timer: Publishers.Autoconnect<Timer.TimerPublisher>? = nil
     @State private var showsSubmitAlert = false
     @State private var completedAttempt: StudentTestAttempt? = nil
+
+    private let countdownTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(test: FacultyTest, studentID: String, studentName: String, token: String?) {
         self.test = test
         self.studentID = studentID
         self.studentName = studentName
         self.token = token
-        _secondsRemaining = State(initialValue: test.durationMinutes * 60)
+        let duration = max(1, test.durationMinutes > 0 ? test.durationMinutes : 15)
+        _secondsRemaining = State(initialValue: duration * 60)
     }
 
     var body: some View {
@@ -916,8 +919,13 @@ struct StudentTakeTestView: View {
                         }
                     }
                 }
-                .onAppear {
-                    startTimer()
+                .onReceive(countdownTimer) { _ in
+                    guard completedAttempt == nil else { return }
+                    if secondsRemaining > 0 {
+                        secondsRemaining -= 1
+                    } else {
+                        submitTest()
+                    }
                 }
                 .alert("Submit Test?", isPresented: $showsSubmitAlert) {
                     Button("Submit", role: .none) {
@@ -928,17 +936,6 @@ struct StudentTakeTestView: View {
                     let answered = selectedAnswers.count
                     Text("You have answered \(answered) of \(test.questions.count) questions. Once submitted, your score will be recorded.")
                 }
-            }
-        }
-    }
-
-    private func startTimer() {
-        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-        _ = timer?.sink { _ in
-            if secondsRemaining > 0 {
-                secondsRemaining -= 1
-            } else {
-                submitTest()
             }
         }
     }

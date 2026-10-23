@@ -23,7 +23,7 @@ final class ModuleStore {
     func loadFromLocalStorage() {
         if let data = UserDefaults.standard.data(forKey: modulesStorageKey),
            let saved = try? JSONDecoder().decode([LearningModule].self, from: data) {
-            self.customModules = saved
+            self.customModules = saved.sortedSerialWise()
         }
         if let data = UserDefaults.standard.data(forKey: questionsStorageKey),
            let saved = try? JSONDecoder().decode([String: [QuizQuestion]].self, from: data) {
@@ -56,6 +56,7 @@ final class ModuleStore {
             questionCount: questions.count
         )
         customModules.append(newModule)
+        customModules = customModules.sortedSerialWise()
         moduleQuestions[newModule.id] = questions
         saveToLocalStorage()
         return newModule

@@ -14,6 +14,10 @@ struct LearningModule: Codable, Identifiable, Equatable, Hashable {
         case title
         case name
         case chapterNumber
+        case chapter_number
+        case chapter
+        case section_number
+        case order
         case summary
         case description
         case questionCount
@@ -40,7 +44,21 @@ struct LearningModule: Codable, Identifiable, Equatable, Hashable {
         title = try container.decodeIfPresent(String.self, forKey: .title)
             ?? container.decodeIfPresent(String.self, forKey: .name)
             ?? "Untitled Module"
-        chapterNumber = try container.decodeIfPresent(Int.self, forKey: .chapterNumber)
+        if let num = try? container.decodeIfPresent(Int.self, forKey: .chapterNumber) {
+            chapterNumber = num
+        } else if let num = try? container.decodeIfPresent(Int.self, forKey: .chapter_number) {
+            chapterNumber = num
+        } else if let num = try? container.decodeIfPresent(Int.self, forKey: .chapter) {
+            chapterNumber = num
+        } else if let num = try? container.decodeIfPresent(Int.self, forKey: .order) {
+            chapterNumber = num
+        } else if let str = try? container.decodeIfPresent(String.self, forKey: .chapterNumber), let num = Int(str) {
+            chapterNumber = num
+        } else if let str = try? container.decodeIfPresent(String.self, forKey: .chapter_number), let num = Int(str) {
+            chapterNumber = num
+        } else {
+            chapterNumber = nil
+        }
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
             ?? container.decodeIfPresent(String.self, forKey: .description)
         let nestedCount = try? container.decodeIfPresent(CountContainer.self, forKey: .count)
@@ -56,6 +74,62 @@ struct LearningModule: Codable, Identifiable, Equatable, Hashable {
         try container.encodeIfPresent(chapterNumber, forKey: .chapterNumber)
         try container.encodeIfPresent(summary, forKey: .summary)
         try container.encodeIfPresent(questionCount, forKey: .questionCount)
+    }
+}
+
+extension LearningModule {
+    var serialChapterNumber: Int {
+        if let chapterNumber, chapterNumber > 0 {
+            return chapterNumber
+        }
+        let pattern = #"(?:Chapter|Ch\b|Module|Section|\b)\s*(\d+)"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)),
+           match.numberOfRanges > 1,
+           let range = Range(match.range(at: 1), in: title),
+           let num = Int(title[range]) {
+            return num
+        }
+        return Int.max
+    }
+}
+
+extension Collection where Element == LearningModule {
+    func sortedSerialWise() -> [LearningModule] {
+        let sorted = self.sorted { m1, m2 in
+            let c1 = m1.serialChapterNumber
+            let c2 = m2.serialChapterNumber
+            if c1 != c2 {
+                return c1 < c2
+            }
+            return m1.title.localizedStandardCompare(m2.title) == .orderedAscending
+        }
+
+        var currentChapter = 1
+        var result: [LearningModule] = []
+        for mod in sorted {
+            let assigned: Int
+            if let existing = mod.chapterNumber, existing > 0 {
+                assigned = existing
+                currentChapter = Swift.max(currentChapter, existing + 1)
+            } else if mod.serialChapterNumber != Int.max {
+                assigned = mod.serialChapterNumber
+                currentChapter = Swift.max(currentChapter, mod.serialChapterNumber + 1)
+            } else {
+                assigned = currentChapter
+                currentChapter += 1
+            }
+            result.append(
+                LearningModule(
+                    id: mod.id,
+                    title: mod.title,
+                    chapterNumber: assigned,
+                    summary: mod.summary,
+                    questionCount: mod.questionCount
+                )
+            )
+        }
+        return result.sorted { ($0.chapterNumber ?? 0) < ($1.chapterNumber ?? 0) }
     }
 }
 
@@ -535,7 +609,8 @@ final class StudentModulesViewModel {
         errorMessage = nil
 
         do {
-            modules = try await APIClient.shared.studentModules(token: activeToken)
+            let fetched = try await APIClient.shared.studentModules(token: activeToken)
+            modules = fetched.sortedSerialWise()
         } catch {
             errorMessage = error.localizedDescription
         }
