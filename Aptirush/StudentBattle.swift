@@ -1312,71 +1312,78 @@ struct BattleLobbyView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    PlayerBattleCard(
-                        name: user?.name ?? "Student",
-                        elo: elo,
-                        tier: tier
-                    )
+            ZStack {
+                AmbientGlowCanvas(
+                    primaryColor: Color.orange.opacity(0.14),
+                    secondaryColor: Color.purple.opacity(0.08)
+                )
 
-                    Picker("Mode", selection: $model.mode) {
-                        ForEach(BattleLobbyViewModel.MatchmakingMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        PlayerBattleCard(
+                            name: user?.name ?? "Student",
+                            elo: elo,
+                            tier: tier
+                        )
+
+                        Picker("Mode", selection: $model.mode) {
+                            ForEach(BattleLobbyViewModel.MatchmakingMode.allCases) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
                         }
-                    }
-                    .pickerStyle(.segmented)
+                        .pickerStyle(.segmented)
 
-                    if let error = model.errorMessage {
-                        ErrorMessageView(message: error)
-                    }
+                        if let error = model.errorMessage {
+                            ErrorMessageView(message: error)
+                        }
 
-                    switch model.mode {
-                    case .random:
-                        RandomMatchSection(
-                            isSearching: model.isSearching,
-                            seconds: model.searchSeconds,
-                            onFind: {
-                                model.startRandomQueue(userId: effectiveUserId)
-                            },
-                            onCancel: {
-                                model.cancelQueue()
-                            }
-                        )
-
-                    case .chamber:
-                        PrivateChamberSection(
-                            createdRoomId: model.createdRoomId,
-                            joinCode: $model.joinRoomCode,
-                            isSearching: model.isSearching,
-                            onCreate: {
-                                model.createChamber(userId: effectiveUserId)
-                            },
-                            onDisband: {
-                                model.disbandChamber()
-                            },
-                            onJoin: {
-                                model.joinChamber(userId: effectiveUserId)
-                            }
-                        )
-
-                    case .bot:
-                        PracticeDuelSection(
-                            isSearching: model.isSearching,
-                            onStart: {
-                                Task {
-                                    await model.startPracticeMatch(
-                                        userId: effectiveUserId,
-                                        token: token
-                                    )
+                        switch model.mode {
+                        case .random:
+                            RandomMatchSection(
+                                isSearching: model.isSearching,
+                                seconds: model.searchSeconds,
+                                onFind: {
+                                    model.startRandomQueue(userId: effectiveUserId)
+                                },
+                                onCancel: {
+                                    model.cancelQueue()
                                 }
-                            }
-                        )
-                    }
+                            )
 
-                    BattleRulesCard()
+                        case .chamber:
+                            PrivateChamberSection(
+                                createdRoomId: model.createdRoomId,
+                                joinCode: $model.joinRoomCode,
+                                isSearching: model.isSearching,
+                                onCreate: {
+                                    model.createChamber(userId: effectiveUserId)
+                                },
+                                onDisband: {
+                                    model.disbandChamber()
+                                },
+                                onJoin: {
+                                    model.joinChamber(userId: effectiveUserId)
+                                }
+                            )
+
+                        case .bot:
+                            PracticeDuelSection(
+                                isSearching: model.isSearching,
+                                onStart: {
+                                    Task {
+                                        await model.startPracticeMatch(
+                                            userId: effectiveUserId,
+                                            token: token
+                                        )
+                                    }
+                                }
+                            )
+                        }
+
+                        BattleRulesCard()
+                    }
+                    .padding()
                 }
-                .padding()
             }
             .navigationTitle("1v1 Arena")
             .navigationDestination(item: $model.activeBattle) { battle in
@@ -1423,28 +1430,33 @@ struct PlayerBattleCard: View {
     var body: some View {
         HStack(spacing: 16) {
             ZStack {
-                Circle()
-                    .fill(tier.color.opacity(0.18))
-                    .frame(width: 60, height: 60)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(tier.color)
+                    .frame(width: 52, height: 52)
+
                 Image(systemName: tier.icon)
-                    .font(.title2.bold())
-                    .foregroundStyle(tier.color)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
-                    .font(.headline)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+
                 HStack(spacing: 8) {
                     Text("\(elo) ELO")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.orange)
+                        .font(.subheadline.weight(.heavy))
+                        .foregroundStyle(AestheticTheme.accent)
+
                     Text("•")
                         .foregroundStyle(.secondary)
+
                     Text(tier.rawValue)
                         .font(.caption.bold())
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(tier.color.opacity(0.15), in: Capsule())
+                        .padding(.vertical, 3)
+                        .background(tier.color.opacity(0.12), in: Capsule())
                         .foregroundStyle(tier.color)
                 }
             }
@@ -1452,11 +1464,11 @@ struct PlayerBattleCard: View {
             Spacer()
 
             Image(systemName: "flag.2.crossed.fill")
-                .font(.title)
-                .foregroundStyle(.orange.opacity(0.8))
+                .font(.title3)
+                .foregroundStyle(AestheticTheme.accent)
         }
-        .padding()
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 16))
+        .padding(16)
+        .luxuryGlass(cornerRadius: 18)
     }
 }
 
@@ -1469,55 +1481,75 @@ struct RandomMatchSection: View {
     var body: some View {
         VStack(spacing: 18) {
             if isSearching {
-                VStack(spacing: 14) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(.orange)
-                        .padding(.top, 8)
+                VStack(spacing: 18) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.orange.opacity(0.12))
+                            .frame(width: 90, height: 90)
 
-                    Text("Finding Contender…")
-                        .font(.headline)
+                        Circle()
+                            .stroke(Color.orange.opacity(0.3), lineWidth: 2)
+                            .frame(width: 75, height: 75)
 
-                    Text("Searching within ±50 MMR")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        ProgressView()
+                            .scaleEffect(1.6)
+                            .tint(.orange)
+                    }
+                    .padding(.top, 8)
+
+                    VStack(spacing: 4) {
+                        Text("Finding Contender…")
+                            .font(.headline.weight(.bold))
+
+                        Text("Searching within ±50 MMR")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
 
                     Text(formatSeconds(seconds))
-                        .font(.title3.monospacedDigit().bold())
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AestheticTheme.accent)
 
                     Button(role: .cancel, action: onCancel) {
                         Text("Cancel Matchmaking")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
                             .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity)
-                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                .luxuryGlass(cornerRadius: 18)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "globe")
-                            .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "globe.americas.fill")
+                            .font(.title3)
+                            .foregroundStyle(AestheticTheme.accent)
                         Text("Instant Matchmaking")
-                            .font(.headline)
+                            .font(.headline.weight(.bold))
                     }
-                    Text("Enter the live matchmaking queue. Contenders within ±50 Elo MMR will be matched automatically for a rapid 5-question speed duel.")
+
+                    Text("Enter the live matchmaking queue. Contenders within ±50 MMR will be matched automatically for a rapid 5-question speed duel.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     Button(action: onFind) {
-                        Label("Find 1v1 Match", systemImage: "bolt.shield.fill")
-                            .frame(maxWidth: .infinity)
+                        HStack(spacing: 8) {
+                            Image(systemName: "bolt.shield.fill")
+                            Text("Find 1v1 Match")
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(AestheticTheme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .controlSize(.large)
                 }
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 18))
+                .padding(20)
+                .luxuryGlass(cornerRadius: 18)
             }
         }
     }
@@ -1542,26 +1574,30 @@ struct PrivateChamberSection: View {
     var body: some View {
         VStack(spacing: 18) {
             if let roomId = createdRoomId {
-                VStack(spacing: 14) {
+                VStack(spacing: 16) {
                     HStack {
                         Image(systemName: "lock.shield.fill")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AestheticTheme.accent)
                         Text("Chamber Created")
-                            .font(.headline)
+                            .font(.headline.weight(.bold))
                         Spacer()
                         Button("Disband", role: .destructive, action: onDisband)
-                            .font(.caption)
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.12), in: Capsule())
+                            .foregroundStyle(.red)
                     }
 
-                    Text("Share this 6-digit code with your challenger:")
+                    Text("Share this 6-digit PIN with your challenger:")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: 14) {
                         Text(roomId)
-                            .font(.system(size: 32, weight: .black, design: .monospaced))
+                            .font(.system(size: 34, weight: .black, design: .monospaced))
                             .kerning(4)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AestheticTheme.accent)
 
                         Button {
                             UIPasteboard.general.string = roomId
@@ -1571,54 +1607,63 @@ struct PrivateChamberSection: View {
                                 hasCopied = false
                             }
                         } label: {
-                            Image(systemName: hasCopied ? "checkmark" : "doc.on.doc")
-                                .font(.headline)
-                                .foregroundStyle(.orange)
+                            Image(systemName: hasCopied ? "checkmark.circle.fill" : "doc.on.doc.fill")
+                                .font(.title3)
+                                .foregroundStyle(hasCopied ? AestheticTheme.success : AestheticTheme.accent)
                         }
                     }
-                    .padding()
-                    .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                     HStack(spacing: 8) {
                         ProgressView()
-                            .scaleEffect(0.8)
+                            .scaleEffect(0.85)
+                            .tint(.orange)
                         Text("Waiting for challenger to join…")
-                            .font(.caption)
+                            .font(.caption.bold())
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 18))
+                .padding(20)
+                .luxuryGlass(cornerRadius: 18)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
                         Image(systemName: "person.2.fill")
-                            .foregroundStyle(.orange)
+                            .font(.title3)
+                            .foregroundStyle(AestheticTheme.accent)
                         Text("Host Private Chamber")
-                            .font(.headline)
+                            .font(.headline.weight(.bold))
                     }
-                    Text("Generate a direct 6-digit lobby passcode for a private match with a friend.")
+
+                    Text("Generate a private 6-digit lobby passcode for a custom speed duel with a friend.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     Button(action: onCreate) {
-                        Label("Host Chamber", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Host Chamber")
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(AestheticTheme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .controlSize(.large)
                 }
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 18))
+                .padding(20)
+                .luxuryGlass(cornerRadius: 18)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
                     Image(systemName: "key.fill")
+                        .font(.title3)
                         .foregroundStyle(.purple)
                     Text("Join Private Chamber")
-                        .font(.headline)
+                        .font(.headline.weight(.bold))
                 }
 
                 TextField("ENTER 6-DIGIT PIN", text: $joinCode)
@@ -1626,8 +1671,13 @@ struct PrivateChamberSection: View {
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.center)
-                    .padding()
-                    .background(.fill.secondary, in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.purple.opacity(0.25), lineWidth: 1)
+                    )
                     .onSubmit {
                         if !joinCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             onJoin()
@@ -1635,22 +1685,26 @@ struct PrivateChamberSection: View {
                     }
 
                 Button(action: onJoin) {
-                    Group {
+                    HStack(spacing: 8) {
                         if isSearching {
                             ProgressView()
+                                .tint(.white)
                         } else {
-                            Label("Join Chamber", systemImage: "arrow.right.circle.fill")
+                            Image(systemName: "arrow.right.circle.fill")
+                            Text("Join Chamber")
+                                .fontWeight(.semibold)
                         }
                     }
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.purple, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.purple)
-                .controlSize(.large)
                 .disabled(joinCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || isSearching)
+                .opacity((joinCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || isSearching) ? 0.6 : 1.0)
             }
-            .padding()
-            .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 18))
+            .padding(20)
+            .luxuryGlass(cornerRadius: 18)
         }
     }
 }
@@ -1660,12 +1714,13 @@ struct PracticeDuelSection: View {
     let onStart: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
                 Image(systemName: "cpu")
-                    .foregroundStyle(.green)
+                    .font(.title3)
+                    .foregroundStyle(AestheticTheme.success)
                 Text("Practice Duel vs AptiBot AI")
-                    .font(.headline)
+                    .font(.headline.weight(.bold))
             }
 
             Text("Spar against an adaptive AI opponent that answers with realistic reaction times. Ideal for warmups when other contenders are offline.")
@@ -1673,32 +1728,36 @@ struct PracticeDuelSection: View {
                 .foregroundStyle(.secondary)
 
             Button(action: onStart) {
-                Group {
+                HStack(spacing: 8) {
                     if isSearching {
                         ProgressView()
+                            .tint(.white)
                     } else {
-                        Label("Start AI Practice Duel", systemImage: "play.fill")
+                        Image(systemName: "play.fill")
+                        Text("Start AI Practice Duel")
+                            .fontWeight(.semibold)
                     }
                 }
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(AestheticTheme.success, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.green)
-            .controlSize(.large)
             .disabled(isSearching)
         }
-        .padding()
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 18))
+        .padding(20)
+        .luxuryGlass(cornerRadius: 18)
     }
 }
 
 struct BattleRulesCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Label("1v1 Arena Rules", systemImage: "info.circle.fill")
-                .font(.headline)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.orange)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 RuleBullet(text: "Each match has 5 speed questions.")
                 RuleBullet(text: "The first player to choose the correct answer claims the round point.")
                 RuleBullet(text: "If you guess wrong, your options are locked while your opponent can still claim the point.")
@@ -1706,8 +1765,8 @@ struct BattleRulesCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 14))
+        .padding(20)
+        .luxuryGlass(cornerRadius: 22)
     }
 }
 
@@ -1868,14 +1927,17 @@ struct BattleVersusHeader: View {
     let totalQuestions: Int
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             HStack {
                 // My Side
                 HStack(spacing: 10) {
-                    Circle()
-                        .fill(.blue.opacity(0.2))
-                        .frame(width: 38, height: 38)
-                        .overlay(Image(systemName: "person.fill").foregroundStyle(.blue))
+                    ZStack {
+                        Circle()
+                            .fill(AestheticTheme.info)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "person.fill")
+                            .foregroundStyle(.white)
+                    }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(myName)
@@ -1883,26 +1945,27 @@ struct BattleVersusHeader: View {
                             .foregroundStyle(.secondary)
                         Text("\(myScore)")
                             .font(.title2.bold())
+                            .foregroundStyle(.primary)
                     }
                 }
 
                 Spacer()
 
                 // VS Badge
-                VStack(spacing: 2) {
+                VStack(spacing: 3) {
                     HStack(spacing: 4) {
                         Image(systemName: "flag.2.crossed.fill")
                             .font(.caption2)
                         Text("VS")
-                            .font(.caption2.bold())
+                            .font(.caption.bold())
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(.orange.opacity(0.2), in: Capsule())
-                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AestheticTheme.accent.opacity(0.14), in: Capsule())
+                    .foregroundStyle(AestheticTheme.accent)
 
                     Text("Q \(questionIndex)/\(totalQuestions)")
-                        .font(.caption2.monospaced())
+                        .font(.caption2.monospaced().bold())
                         .foregroundStyle(.secondary)
                 }
 
@@ -1916,22 +1979,27 @@ struct BattleVersusHeader: View {
                             .foregroundStyle(.secondary)
                         Text("\(opponentScore)")
                             .font(.title2.bold())
+                            .foregroundStyle(.primary)
                     }
 
-                    Circle()
-                        .fill(.purple.opacity(0.2))
-                        .frame(width: 38, height: 38)
-                        .overlay(Image(systemName: "person.fill").foregroundStyle(.purple))
+                    ZStack {
+                        Circle()
+                            .fill(Color.purple)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "person.fill")
+                            .foregroundStyle(.white)
+                    }
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 18)
 
             ProgressView(value: Double(questionIndex), total: Double(totalQuestions))
-                .tint(.orange)
+                .tint(AestheticTheme.accent)
+                .padding(.horizontal, 18)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .background(.fill.tertiary)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+        .luxuryGlass(cornerRadius: 0)
     }
 }
 
@@ -1952,29 +2020,30 @@ struct BattleOptionButton: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Text(option.id)
                     .font(.subheadline.bold())
-                    .frame(width: 28, height: 28)
-                    .background(badgeBackground, in: Circle())
+                    .frame(width: 32, height: 32)
+                    .background(badgeBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .foregroundStyle(badgeForeground)
 
                 Text(option.text)
-                    .font(.subheadline)
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
 
                 if isSelected {
                     Image(systemName: roundStatus == .myAnswerWrong ? "xmark.circle.fill" : "checkmark.circle.fill")
+                        .font(.title3)
                         .foregroundStyle(roundStatus == .myAnswerWrong ? .red : .orange)
                 }
             }
-            .padding(14)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+            .padding(16)
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(borderStroke, lineWidth: 1.5)
             )
         }
@@ -2002,12 +2071,12 @@ struct BattleOptionButton: View {
 
     private var cardBackground: Color {
         if isOptionCorrect && roundStatus != .idle {
-            return .green.opacity(0.12)
+            return .green.opacity(0.14)
         }
         if isSelected {
-            return (roundStatus == .myAnswerWrong ? Color.red : Color.orange).opacity(0.12)
+            return (roundStatus == .myAnswerWrong ? Color.red : Color.orange).opacity(0.14)
         }
-        return Color(.secondarySystemBackground)
+        return Color(.secondarySystemBackground).opacity(0.6)
     }
 
     private var borderStroke: Color {
@@ -2017,7 +2086,7 @@ struct BattleOptionButton: View {
         if isSelected {
             return roundStatus == .myAnswerWrong ? .red : .orange
         }
-        return .clear
+        return Color.white.opacity(0.12)
     }
 }
 
@@ -2038,20 +2107,20 @@ struct BattleResultView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 // Result Icon & Headline
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     if isDraw {
                         ZStack {
                             Circle()
-                                .fill(.blue.opacity(0.15))
+                                .fill(AestheticTheme.info)
                                 .frame(width: 80, height: 80)
                             Image(systemName: "flag.2.crossed.fill")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.blue)
+                                .font(.system(size: 38))
+                                .foregroundStyle(.white)
                         }
                         Text("DRAW GAME")
-                            .font(.largeTitle.bold())
+                            .font(.system(size: 32, weight: .heavy, design: .rounded))
                             .foregroundStyle(.primary)
                         Text("Evenly matched duelists! Both claimed an equal share of speed points.")
                             .font(.subheadline)
@@ -2060,14 +2129,14 @@ struct BattleResultView: View {
                     } else if isVictory {
                         ZStack {
                             Circle()
-                                .fill(.yellow.opacity(0.18))
+                                .fill(AestheticTheme.warning)
                                 .frame(width: 80, height: 80)
                             Image(systemName: "trophy.fill")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.yellow)
+                                .font(.system(size: 38))
+                                .foregroundStyle(.white)
                         }
                         Text("VICTORY!")
-                            .font(.largeTitle.bold())
+                            .font(.system(size: 32, weight: .heavy, design: .rounded))
                             .foregroundStyle(.primary)
                         Text("Outstanding reflexes and accuracy! You dominated the speed duel.")
                             .font(.subheadline)
@@ -2076,14 +2145,14 @@ struct BattleResultView: View {
                     } else {
                         ZStack {
                             Circle()
-                                .fill(.red.opacity(0.15))
+                                .fill(AestheticTheme.danger)
                                 .frame(width: 80, height: 80)
                             Image(systemName: "shield.fill")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.red)
+                                .font(.system(size: 38))
+                                .foregroundStyle(.white)
                         }
                         Text("DEFEAT")
-                            .font(.largeTitle.bold())
+                            .font(.system(size: 32, weight: .heavy, design: .rounded))
                             .foregroundStyle(.primary)
                         Text("Close match! Fast-fingered speed makes all the difference.")
                             .font(.subheadline)
@@ -2091,24 +2160,24 @@ struct BattleResultView: View {
                             .multilineTextAlignment(.center)
                     }
                 }
-                .padding(.top, 16)
+                .padding(.top, 20)
 
                 // MMR / ELO Pill
                 if let change = eloChange {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
                             .font(.caption.bold())
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AestheticTheme.accent)
                         Text("MMR UPDATE:")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
                         Text(change >= 0 ? "+\(change) ELO" : "\(change) ELO")
                             .font(.subheadline.bold())
-                            .foregroundStyle(change > 0 ? .green : (change < 0 ? .red : .secondary))
+                            .foregroundStyle(change > 0 ? AestheticTheme.success : (change < 0 ? AestheticTheme.danger : .secondary))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(.fill.tertiary, in: Capsule())
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .luxuryGlass(cornerRadius: 20)
                 }
 
                 // Duel Scores Comparison
@@ -2116,25 +2185,25 @@ struct BattleResultView: View {
                     VStack(spacing: 8) {
                         Text("YOU")
                             .font(.caption.bold())
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AestheticTheme.accent)
                         Text("\(myScore)")
                             .font(.system(size: 54, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AestheticTheme.accent)
                         if isVictory {
                             Text("Winner")
                                 .font(.caption2.bold())
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(.green.opacity(0.2), in: Capsule())
-                                .foregroundStyle(.green)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(AestheticTheme.success.opacity(0.18), in: Capsule())
+                                .foregroundStyle(AestheticTheme.success)
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.vertical, 20)
+                    .luxuryGlass(cornerRadius: 18)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isVictory ? .green.opacity(0.4) : .clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(isVictory ? AestheticTheme.success.opacity(0.5) : Color.clear, lineWidth: 1.5)
                     )
 
                     VStack(spacing: 8) {
@@ -2147,18 +2216,18 @@ struct BattleResultView: View {
                         if !isVictory && !isDraw {
                             Text("Winner")
                                 .font(.caption2.bold())
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(.red.opacity(0.2), in: Capsule())
-                                .foregroundStyle(.red)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(AestheticTheme.danger.opacity(0.18), in: Capsule())
+                                .foregroundStyle(AestheticTheme.danger)
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.vertical, 20)
+                    .luxuryGlass(cornerRadius: 18)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(!isVictory && !isDraw ? .red.opacity(0.4) : .clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(!isVictory && !isDraw ? AestheticTheme.danger.opacity(0.5) : Color.clear, lineWidth: 1.5)
                     )
                 }
 
@@ -2166,13 +2235,16 @@ struct BattleResultView: View {
 
                 // Return Button
                 Button(action: onDismiss) {
-                    Label("Return to Arena Lobby", systemImage: "flag.2.crossed.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
+                    HStack(spacing: 8) {
+                        Image(systemName: "flag.2.crossed.fill")
+                        Text("Return to Arena Lobby")
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(AestheticTheme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .controlSize(.large)
             }
             .padding(24)
         }

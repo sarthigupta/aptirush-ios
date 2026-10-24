@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Security
+import SwiftUI
 
 enum AppConfiguration {
     #if DEBUG
@@ -617,5 +618,64 @@ final class SessionStore {
         token = nil
         user = nil
         errorMessage = nil
+    }
+}
+
+// MARK: - Crisp Modern Aesthetic Design System
+
+enum AestheticTheme {
+    // Single signature vibrant accent: Pure Electric Rush Orange
+    static let accent = Color(red: 1.0, green: 0.38, blue: 0.0) // #FF6100
+    
+    // Status colors: solid, crisp, unblended
+    static let success = Color(red: 0.13, green: 0.77, blue: 0.45) // #22C55E
+    static let warning = Color(red: 0.96, green: 0.62, blue: 0.04) // #F59E0B
+    static let danger = Color(red: 0.94, green: 0.27, blue: 0.27)  // #EF4444
+    static let info = Color(red: 0.23, green: 0.51, blue: 0.96)    // #3B82F6
+    static let darkCard = Color(red: 0.08, green: 0.09, blue: 0.12) // #14171F
+}
+
+// Compatibility mappings pointing to pure, unblended solid colors:
+enum LuxuryTheme {
+    static let primarySunset = [AestheticTheme.accent, AestheticTheme.accent]
+    static let auroraPurple = [Color.purple, Color.purple]
+    static let oceanCyan = [Color.blue, Color.blue]
+    static let emeraldSuccess = [AestheticTheme.success, AestheticTheme.success]
+    static let amberGold = [AestheticTheme.warning, AestheticTheme.warning]
+}
+
+struct LuxuryGlassModifier: ViewModifier {
+    var cornerRadius: CGFloat = 18
+    var strokeOpacity: CGFloat = 0.08
+
+    func body(content: Content) -> some View {
+        content
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(strokeOpacity), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+    }
+}
+
+extension View {
+    func luxuryGlass(cornerRadius: CGFloat = 18, strokeOpacity: CGFloat = 0.08) -> some View {
+        modifier(LuxuryGlassModifier(cornerRadius: cornerRadius, strokeOpacity: strokeOpacity))
+    }
+
+    func aestheticCard(cornerRadius: CGFloat = 18, strokeOpacity: CGFloat = 0.08) -> some View {
+        modifier(LuxuryGlassModifier(cornerRadius: cornerRadius, strokeOpacity: strokeOpacity))
+    }
+}
+
+// Clean unified backdrop - eliminates muddy color bleed
+struct AmbientGlowCanvas: View {
+    var primaryColor: Color = Color.clear
+    var secondaryColor: Color = Color.clear
+
+    var body: some View {
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
     }
 }

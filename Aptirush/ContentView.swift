@@ -60,88 +60,174 @@ struct LoginFormView: View {
     @State private var isSubmitting = false
 
     var body: some View {
-        VStack(spacing: 28) {
-            AuthenticationHeader()
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
 
-            VStack(spacing: 16) {
-                Picker("Account type", selection: $selectedRole) {
-                    Text("Student").tag(UserRole.student)
-                    Text("Faculty").tag(UserRole.faculty)
-                    Text("Admin").tag(UserRole.admin)
-                }
-                .pickerStyle(.segmented)
+            ScrollView {
+                VStack(spacing: 32) {
+                    AuthenticationHeader()
 
-                TextField("Email address", text: $email)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-                    .padding()
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 12))
-
-                SecureField("Password", text: $password)
-                    .textContentType(.password)
-                    .padding()
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 12))
-
-                if let errorMessage = session.errorMessage {
-                    ErrorMessageView(message: errorMessage)
-                }
-
-                Button {
-                    Task {
-                        isSubmitting = true
-                        _ = await session.signIn(email: email, password: password, role: selectedRole)
-                        isSubmitting = false
-                    }
-                } label: {
-                    Group {
-                        if isSubmitting {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text("Sign In")
+                    VStack(spacing: 20) {
+                        Picker("Account type", selection: $selectedRole) {
+                            Text("Student").tag(UserRole.student)
+                            Text("Faculty").tag(UserRole.faculty)
+                            Text("Admin").tag(UserRole.admin)
                         }
+                        .pickerStyle(.segmented)
+
+                        VStack(spacing: 12) {
+                            // Sleek Input Field 1: Email
+                            HStack(spacing: 14) {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AestheticTheme.accent)
+                                    .frame(width: 24)
+
+                                TextField("Email address", text: $email)
+                                    .textContentType(.emailAddress)
+                                    .textInputAutocapitalization(.never)
+                                    .keyboardType(.emailAddress)
+                                    .autocorrectionDisabled()
+
+                                if !email.isEmpty {
+                                    Button {
+                                        email = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+
+                            // Sleek Input Field 2: Password
+                            HStack(spacing: 14) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AestheticTheme.accent)
+                                    .frame(width: 24)
+
+                                SecureField("Password", text: $password)
+                                    .textContentType(.password)
+
+                                if !password.isEmpty {
+                                    Button {
+                                        password = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+
+                        if let errorMessage = session.errorMessage {
+                            ErrorMessageView(message: errorMessage)
+                        }
+
+                        Button {
+                            Task {
+                                isSubmitting = true
+                                _ = await session.signIn(email: email, password: password, role: selectedRole)
+                                isSubmitting = false
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isSubmitting {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Sign In")
+                                        .font(.headline.weight(.semibold))
+                                    Image(systemName: "arrow.right")
+                                        .font(.subheadline.bold())
+                                }
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(AestheticTheme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .disabled(email.isEmpty || password.isEmpty || isSubmitting)
+                        .opacity((email.isEmpty || password.isEmpty || isSubmitting) ? 0.6 : 1.0)
                     }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(email.isEmpty || password.isEmpty || isSubmitting)
-            }
+                    .padding(20)
+                    .luxuryGlass(cornerRadius: 20)
 
-            if selectedRole == .student {
-                Button("Create a student account") {
-                    showsRegistration = true
-                }
-                .buttonStyle(.borderless)
-            } else if selectedRole == .faculty {
-                Text("Faculty accounts are provisioned by your institution.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+                    if selectedRole == .student {
+                        Button {
+                            showsRegistration = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("New to AptiRush?")
+                                    .foregroundStyle(.secondary)
+                                Text("Create an account")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(AestheticTheme.accent)
+                            }
+                            .font(.subheadline)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 16)
+                            .background(Color(.secondarySystemBackground), in: Capsule())
+                            .overlay(
+                                Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+                    } else if selectedRole == .faculty {
+                        Text("Faculty accounts are provisioned by your institution.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
 
-            Spacer()
+                    Spacer(minLength: 30)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+            }
         }
-        .padding(24)
     }
 }
 
 struct AuthenticationHeader: View {
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "bolt.circle.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.orange)
-                .accessibilityHidden(true)
+        VStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(AestheticTheme.accent)
+                    .frame(width: 76, height: 76)
+                    .shadow(color: AestheticTheme.accent.opacity(0.3), radius: 10, x: 0, y: 5)
 
-            Text("AptiRush")
-                .font(.largeTitle.bold())
+                Image(systemName: "bolt.shield.fill")
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundStyle(.white)
+            }
 
-            Text("Practice smarter. Progress faster.")
-                .foregroundStyle(.secondary)
+            VStack(spacing: 6) {
+                Text("AptiRush")
+                    .font(.system(size: 32, weight: .black, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text("Practice smarter. Progress faster.")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
         }
-        .padding(.top, 40)
     }
 }
 
@@ -154,54 +240,128 @@ struct StudentRegistrationView: View {
     @State private var isSubmitting = false
 
     var body: some View {
-        Form {
-            Section("Your details") {
-                TextField("Name", text: $name)
-                    .textContentType(.name)
-                TextField("Email address", text: $email)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-                SecureField("Password (at least 6 characters)", text: $password)
-                    .textContentType(.newPassword)
-            }
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
 
-            if let errorMessage = session.errorMessage {
-                Section {
-                    ErrorMessageView(message: errorMessage)
-                }
-            }
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Join AptiRush")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
 
-            Section {
-                Button {
-                    Task {
-                        isSubmitting = true
-                        let didRegister = await session.registerStudent(
-                            name: name,
-                            email: email,
-                            password: password
+                        Text("Set up your account to start speed duels, practice tests, and track your aptitude journey.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 12)
+
+                    VStack(spacing: 16) {
+                        // Name input
+                        HStack(spacing: 14) {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AestheticTheme.accent)
+                                .frame(width: 24)
+
+                            TextField("Full Name", text: $name)
+                                .textContentType(.name)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                         )
-                        isSubmitting = false
 
-                        if didRegister {
-                            dismiss()
+                        // Email input
+                        HStack(spacing: 14) {
+                            Image(systemName: "envelope.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AestheticTheme.accent)
+                                .frame(width: 24)
+
+                            TextField("Email address", text: $email)
+                                .textContentType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                                .keyboardType(.emailAddress)
+                                .autocorrectionDisabled()
                         }
-                    }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if isSubmitting {
-                            ProgressView()
-                        } else {
-                            Text("Create Account")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+
+                        // Password input
+                        HStack(spacing: 14) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AestheticTheme.accent)
+                                .frame(width: 24)
+
+                            SecureField("Password (at least 6 characters)", text: $password)
+                                .textContentType(.newPassword)
                         }
-                        Spacer()
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+
+                        if let errorMessage = session.errorMessage {
+                            ErrorMessageView(message: errorMessage)
+                        }
+
+                        Button {
+                            Task {
+                                isSubmitting = true
+                                let didRegister = await session.registerStudent(
+                                    name: name,
+                                    email: email,
+                                    password: password
+                                )
+                                isSubmitting = false
+
+                                if didRegister {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isSubmitting {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Create Account")
+                                        .font(.headline.weight(.semibold))
+                                    Image(systemName: "arrow.right")
+                                        .font(.subheadline.bold())
+                                }
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(AestheticTheme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .disabled(name.count < 2 || email.isEmpty || password.count < 6 || isSubmitting)
+                        .opacity((name.count < 2 || email.isEmpty || password.count < 6 || isSubmitting) ? 0.6 : 1.0)
                     }
+                    .padding(20)
+                    .luxuryGlass(cornerRadius: 20)
                 }
-                .disabled(name.count < 2 || email.isEmpty || password.count < 6 || isSubmitting)
+                .padding(20)
             }
         }
         .navigationTitle("Create Account")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -221,7 +381,7 @@ struct StudentHomeView: View {
                 onSelectTests: { selectedTab = 1 }
             )
             .tabItem {
-                Label("Home", systemImage: "house")
+                Label("Home", systemImage: "house.fill")
             }
             .tag(0)
 
@@ -239,16 +399,17 @@ struct StudentHomeView: View {
 
             StudentLearningView(token: session.token)
                 .tabItem {
-                    Label("Learn", systemImage: "book")
+                    Label("Learn", systemImage: "book.fill")
                 }
                 .tag(3)
 
             AccountView(name: name, role: .student, session: session)
                 .tabItem {
-                    Label("Account", systemImage: "person")
+                    Label("Account", systemImage: "person.crop.circle.fill")
                 }
                 .tag(4)
         }
+        .tint(.orange)
     }
 }
 
@@ -313,67 +474,38 @@ struct StudentDashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    StudentWelcomeHeader(name: name)
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
 
-                    StudentStatsGrid(
-                        modulesCount: model.modulesCount,
-                        accuracy: model.accuracy,
-                        streak: model.streak,
-                        isLoading: model.isLoading
-                    )
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        StudentWelcomeHeader(name: name, streak: model.streak)
 
-                    Button {
-                        onSelectArena?()
-                    } label: {
-                        HStack(spacing: 16) {
-                            ZStack {
-                                Circle()
-                                    .fill(.orange.opacity(0.18))
-                                    .frame(width: 48, height: 48)
-                                Image(systemName: "flag.2.crossed.fill")
-                                    .font(.title2.bold())
-                                    .foregroundStyle(.orange)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 8) {
-                                    Text("1v1 Battle Arena")
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text("LIVE")
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(.red, in: Capsule())
-                                        .foregroundStyle(.white)
-                                }
-                                Text("Challenge batchmates or AI in real-time speed duels")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 18))
+                        StudentHeroArenaCard(onSelectArena: onSelectArena)
+
+                        StudentStatsGrid(
+                            modulesCount: model.modulesCount,
+                            accuracy: model.accuracy,
+                            streak: model.streak,
+                            isLoading: model.isLoading
+                        )
+
+                        StudentQuickActionsSection(
+                            token: token,
+                            user: user,
+                            analytics: model.analytics,
+                            onSelectArena: onSelectArena,
+                            onSelectTests: onSelectTests
+                        )
                     }
-                    .buttonStyle(.plain)
-
-                    StudentQuickActionsSection(
-                        token: token,
-                        user: user,
-                        analytics: model.analytics,
-                        onSelectArena: onSelectArena,
-                        onSelectTests: onSelectTests
-                    )
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, 28)
                 }
-                .padding()
             }
             .navigationTitle("Dashboard")
+            .navigationBarTitleDisplayMode(.inline)
             .task {
                 await model.load(token: token, userID: user?.id)
             }
@@ -386,18 +518,160 @@ struct StudentDashboardView: View {
 
 struct StudentWelcomeHeader: View {
     let name: String
+    let streak: Int
+
+    private var greetingTimeOfDay: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<12: return "Good morning,"
+        case 12..<17: return "Good afternoon,"
+        default: return "Good evening,"
+        }
+    }
+
+    private var initials: String {
+        let parts = name.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: " ")
+        if parts.count >= 2, let f = parts.first?.first, let l = parts.last?.first {
+            return "\(f)\(l)".uppercased()
+        }
+        return String(name.prefix(2)).uppercased()
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Welcome back,")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text(name)
-                .font(.largeTitle.bold())
-            Text("Ready to sharpen your aptitude today?")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(greetingTimeOfDay)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+
+                    if streak > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .font(.caption2.bold())
+                                .foregroundStyle(AestheticTheme.accent)
+                            Text("\(streak)d streak")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.primary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(AestheticTheme.accent.opacity(0.12), in: Capsule())
+                    }
+                }
+
+                Text(name)
+                    .font(.system(.title, design: .rounded).weight(.bold))
+                    .foregroundStyle(.primary)
+
+                Text("Sharpen your aptitude with targeted practice.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            ZStack {
+                Circle()
+                    .fill(AestheticTheme.accent)
+                    .frame(width: 48, height: 48)
+
+                Text(initials)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+            }
         }
+        .padding(.vertical, 4)
+    }
+}
+
+struct StudentHeroArenaCard: View {
+    let onSelectArena: (() -> Void)?
+
+    var body: some View {
+        Button {
+            onSelectArena?()
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                // High-Contrast Solid Obsidian/Titanium Surface
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(AestheticTheme.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+
+                // Monochromatic Watermark Emblem
+                HStack {
+                    Spacer()
+                    Image(systemName: "flag.2.crossed.fill")
+                        .font(.system(size: 130))
+                        .foregroundStyle(Color.white.opacity(0.04))
+                        .offset(x: 20, y: 15)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+                // Card Content
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(AestheticTheme.success)
+                                .frame(width: 8, height: 8)
+
+                            Text("LIVE 1V1 ARENA")
+                                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                .foregroundStyle(Color.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.10), in: Capsule())
+
+                        Spacer()
+
+                        Text("SPEED ROUNDS")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.white.opacity(0.70))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.08), in: Capsule())
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("1v1 Battle Arena")
+                            .font(.system(size: 26, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.white)
+
+                        Text("Challenge contenders in real-time speed duels or train against AI.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.white.opacity(0.72))
+                            .lineLimit(2)
+                    }
+
+                    HStack {
+                        HStack(spacing: 6) {
+                            Text("Enter Arena")
+                                .font(.subheadline.bold())
+                            Image(systemName: "arrow.right")
+                                .font(.footnote.bold())
+                        }
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(AestheticTheme.accent, in: Capsule())
+
+                        Spacer()
+
+                        Text("Matchmaking Ready")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Color.white.opacity(0.60))
+                    }
+                }
+                .padding(20)
+            }
+            .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -408,26 +682,29 @@ struct StudentStatsGrid: View {
     let isLoading: Bool
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        HStack(spacing: 12) {
             StudentStatCard(
-                title: "Modules",
+                title: "MODULES",
                 value: modulesCount.map(String.init) ?? (isLoading ? "…" : "—"),
+                subtitle: "Curriculum",
                 icon: "folder.fill",
-                color: .orange
+                tint: AestheticTheme.accent
             )
 
             StudentStatCard(
-                title: "Accuracy",
+                title: "ACCURACY",
                 value: isLoading && accuracy == "—" ? "…" : accuracy,
+                subtitle: "Overall pace",
                 icon: "scope",
-                color: .blue
+                tint: AestheticTheme.info
             )
 
             StudentStatCard(
-                title: "Day Streak",
+                title: "DAY STREAK",
                 value: isLoading ? "…" : "\(streak)",
+                subtitle: "Active days",
                 icon: "flame.fill",
-                color: .red
+                tint: AestheticTheme.warning
             )
         }
     }
@@ -436,22 +713,47 @@ struct StudentStatsGrid: View {
 struct StudentStatCard: View {
     let title: String
     let value: String
+    let subtitle: String
     let icon: String
-    let color: Color
+    let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-            Text(value)
-                .font(.title2.bold())
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.12))
+                        .frame(width: 34, height: 34)
+
+                    Image(systemName: icon)
+                        .font(.footnote.bold())
+                        .foregroundStyle(tint)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+
+                Text(subtitle)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
+        .padding(14)
+        .luxuryGlass(cornerRadius: 16)
     }
 }
 
@@ -464,63 +766,48 @@ struct StudentQuickActionsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Continue Learning")
-                .font(.title3.bold())
+            VStack(alignment: .leading, spacing: 4) {
+                Text("EXPEDITIONS")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .tracking(1)
 
+                Text("Continue Learning")
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+            }
+            .padding(.top, 4)
+
+            // 1. Assigned Tests
             Button {
                 onSelectTests?()
             } label: {
-                HStack {
-                    Label("Assigned Tests", systemImage: "list.clipboard.fill")
-                    Spacer()
-                    let pending = TestStore.shared.tests.filter { TestStore.shared.attempts[$0.id] == nil }.count
-                    if pending > 0 {
-                        Text("\(pending) New")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.orange.opacity(0.2), in: Capsule())
-                            .foregroundStyle(.orange)
-                    } else if !TestStore.shared.tests.isEmpty {
-                        Text("\(TestStore.shared.tests.count) Available")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
+                LuxuryQuickActionTile(
+                    title: "Assigned Tests",
+                    subtitle: "Institutional timed test sessions",
+                    icon: "list.clipboard.fill",
+                    iconColor: AestheticTheme.info,
+                    badgeText: pendingTestsBadgeText,
+                    badgeColor: AestheticTheme.info
+                )
             }
             .buttonStyle(.plain)
 
-            Button {
-                onSelectArena?()
-            } label: {
-                HStack {
-                    Label("1v1 Arena & Private Chamber", systemImage: "flag.2.crossed.fill")
-                    Spacer()
-                    Text("Duel")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.orange.opacity(0.2), in: Capsule())
-                        .foregroundStyle(.orange)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
-
+            // 2. Learning Modules
             NavigationLink {
                 StudentModulesView(token: token)
             } label: {
-                Label("Browse modules", systemImage: "book.closed")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(.orange.opacity(0.16), in: RoundedRectangle(cornerRadius: 14))
+                LuxuryQuickActionTile(
+                    title: "Browse Modules",
+                    subtitle: "Structured aptitude chapters & quizzes",
+                    icon: "book.closed.fill",
+                    iconColor: AestheticTheme.accent,
+                    badgeText: "Explore",
+                    badgeColor: AestheticTheme.accent
+                )
             }
+            .buttonStyle(.plain)
 
+            // 3. Performance Review
             NavigationLink {
                 PerformanceReviewView(
                     token: token,
@@ -528,61 +815,112 @@ struct StudentQuickActionsSection: View {
                     initialAnalytics: analytics
                 )
             } label: {
-                HStack {
-                    Label("Review performance", systemImage: "chart.line.uptrend.xyaxis")
-                    Spacer()
-                    if let count = analytics?.mistakeCount, count > 0 {
-                        Text("\(count) in Vault")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.purple.opacity(0.18), in: Capsule())
-                            .foregroundStyle(.purple)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
+                LuxuryQuickActionTile(
+                    title: "Review Performance",
+                    subtitle: "Accuracy, pace metrics & ELO rating",
+                    icon: "chart.line.uptrend.xyaxis",
+                    iconColor: Color.purple,
+                    badgeText: analytics?.mistakeCount.map { "\($0) in Vault" },
+                    badgeColor: Color.purple
+                )
             }
+            .buttonStyle(.plain)
 
+            // 4. Cohort Leaderboard
             NavigationLink {
                 StudentLeaderboardView(token: token, currentUserID: user?.id)
             } label: {
-                HStack {
-                    Label("Cohort Leaderboard", systemImage: "trophy.fill")
-                    Spacer()
-                    Text("Rankings")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.yellow.opacity(0.2), in: Capsule())
-                        .foregroundStyle(.orange)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
+                LuxuryQuickActionTile(
+                    title: "Cohort Leaderboard",
+                    subtitle: "Compare standings with batchmates",
+                    icon: "trophy.fill",
+                    iconColor: AestheticTheme.warning,
+                    badgeText: "Rankings",
+                    badgeColor: AestheticTheme.warning
+                )
             }
+            .buttonStyle(.plain)
 
+            // 5. Mistake Vault
             NavigationLink {
                 MistakeVaultView(token: token)
             } label: {
-                HStack {
-                    Label("Mistake Vault", systemImage: "archivebox.fill")
-                    Spacer()
-                    if let count = analytics?.mistakeCount, count > 0 {
-                        Text("\(count)")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.orange.opacity(0.2), in: Capsule())
-                            .foregroundStyle(.orange)
-                    }
+                LuxuryQuickActionTile(
+                    title: "Mistake Vault",
+                    subtitle: "Targeted practice on previously missed problems",
+                    icon: "archivebox.fill",
+                    iconColor: AestheticTheme.danger,
+                    badgeText: analytics?.mistakeCount.map { "\($0) Items" },
+                    badgeColor: AestheticTheme.danger
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var pendingTestsBadgeText: String? {
+        let pending = TestStore.shared.tests.filter { TestStore.shared.attempts[$0.id] == nil }.count
+        if pending > 0 {
+            return "\(pending) New"
+        } else if !TestStore.shared.tests.isEmpty {
+            return "\(TestStore.shared.tests.count) Active"
+        }
+        return nil
+    }
+}
+
+struct LuxuryQuickActionTile: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    var iconColor: Color = AestheticTheme.accent
+    var badgeText: String? = nil
+    var badgeColor: Color = AestheticTheme.accent
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 44, height: 44)
+
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(iconColor)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 8) {
+                if let badgeText {
+                    Text(badgeText)
+                        .font(.caption2.bold())
+                        .foregroundStyle(badgeColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(badgeColor.opacity(0.12), in: Capsule())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 14))
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 24, height: 24)
+                    .background(Color(.tertiarySystemFill), in: Circle())
             }
         }
+        .padding(14)
+        .luxuryGlass(cornerRadius: 16)
     }
 }
 
@@ -1114,21 +1452,175 @@ struct AccountView: View {
     let role: UserRole
     let session: SessionStore
 
+    @State private var showingSignOutConfirmation = false
+
+    private var initials: String {
+        let parts = name.split(separator: " ")
+        if let first = parts.first?.prefix(1) {
+            if parts.count > 1, let second = parts.last?.prefix(1) {
+                return "\(first)\(second)".uppercased()
+            }
+            return String(first).uppercased()
+        }
+        return "AR"
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section("Signed In As") {
-                    LabeledContent("Name", value: name)
-                    LabeledContent("Role", value: role.title)
-                }
+            ZStack {
+                AmbientGlowCanvas(
+                    primaryColor: Color.orange.opacity(0.12),
+                    secondaryColor: Color.blue.opacity(0.08)
+                )
 
-                Section {
-                    Button("Sign Out", role: .destructive) {
-                        session.signOut()
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Profile Hero Slab
+                        VStack(spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(AestheticTheme.accent)
+                                    .frame(width: 84, height: 84)
+
+                                Text(initials)
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.top, 8)
+
+                            VStack(spacing: 4) {
+                                Text(name)
+                                    .font(.title2.weight(.bold))
+                                    .foregroundStyle(.primary)
+
+                                if let email = session.user?.email, !email.isEmpty {
+                                    Text(email)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            HStack(spacing: 8) {
+                                Label(role.title, systemImage: roleIcon)
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(roleColor.opacity(0.14), in: Capsule())
+                                    .foregroundStyle(roleColor)
+
+                                Label("Verified", systemImage: "checkmark.seal.fill")
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.green.opacity(0.14), in: Capsule())
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                        .padding(.horizontal, 20)
+                        .luxuryGlass(cornerRadius: 24)
+
+                        // Info & Settings Card
+                        VStack(spacing: 16) {
+                            AccountDetailRow(
+                                title: "Full Name",
+                                value: name,
+                                icon: "person.fill",
+                                iconColor: .orange
+                            )
+                            Divider().opacity(0.4)
+                            AccountDetailRow(
+                                title: "Role",
+                                value: role.title,
+                                icon: "shield.checkered",
+                                iconColor: .blue
+                            )
+                            Divider().opacity(0.4)
+                            AccountDetailRow(
+                                title: "Platform",
+                                value: "AptiRush iOS 2.0",
+                                icon: "iphone",
+                                iconColor: .purple
+                            )
+                        }
+                        .padding(20)
+                        .luxuryGlass(cornerRadius: 24)
+
+                        // Sign Out Button
+                        Button(role: .destructive) {
+                            showingSignOutConfirmation = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    .font(.headline)
+                                Text("Sign Out")
+                                    .font(.headline.weight(.semibold))
+                            }
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .strokeBorder(Color.red.opacity(0.25), lineWidth: 1)
+                            )
+                        }
+                        .confirmationDialog("Are you sure you want to sign out?", isPresented: $showingSignOutConfirmation, titleVisibility: .visible) {
+                            Button("Sign Out", role: .destructive) {
+                                session.signOut()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        }
                     }
+                    .padding(20)
                 }
             }
             .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var roleIcon: String {
+        switch role {
+        case .student: return "graduationcap.fill"
+        case .faculty: return "person.badge.key.fill"
+        case .admin: return "crown.fill"
+        }
+    }
+
+    private var roleColor: Color {
+        switch role {
+        case .student: return .orange
+        case .faculty: return .indigo
+        case .admin: return .purple
+        }
+    }
+}
+
+struct AccountDetailRow: View {
+    let title: String
+    let value: String
+    let icon: String
+    let iconColor: Color
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 28, height: 28)
+                .background(iconColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
         }
     }
 }
