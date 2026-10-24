@@ -361,10 +361,14 @@ final class BattleSocketClient {
 
     private var webSocket: URLSessionWebSocketTask?
     private var pingTimer: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
     private var isConnecting = false
     private(set) var isConnected = false
     private var isReading = false
     private var pendingEmits: [(event: String, payload: [String: Any])] = []
+
+    var activeBattleId: String? = nil
+    var currentUserId: String? = nil
 
     var onConnect: (() -> Void)?
     var onMatchFound: ((BattleData) -> Void)?
@@ -396,8 +400,36 @@ final class BattleSocketClient {
 
         cleanupSocketOnly()
 
+        // Ultra-low latency: connect directly via WebSocket first
+        connectDirect()
+    }
+
+    private func connectDirect() {
+        guard let url = URL(string: "wss://aptirush.onrender.com/socket.io/?EIO=4&transport=websocket") else {
+            isConnecting = false
+            return
+        }
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.httpAdditionalHeaders = [
+            "Origin": "https://aptirush.onrender.com",
+            "Referer": "https://aptirush.onrender.com",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+        ]
+        let session = URLSession(configuration: config)
+        let ws = session.webSocketTask(with: url)
+        self.webSocket = ws
+        ws.resume()
+
+        startReading()
+        startPingTimer()
+
+        // Fallback to polling handshake if direct WebSocket does not connect within 3.5 seconds
         Task { [weak self] in
-            await self?.performHandshakeAndConnect()
+            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            guard let self, self.isConnecting, !self.isConnected else { return }
+            await self.performHandshakeAndConnect()
         }
     }
 
@@ -412,7 +444,7 @@ final class BattleSocketClient {
             request.setValue("https://aptirush.onrender.com", forHTTPHeaderField: "Origin")
             request.setValue("https://aptirush.onrender.com", forHTTPHeaderField: "Referer")
             request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
-            request.timeoutInterval = 15
+            request.timeoutInterval = 10
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let text = String(data: data, encoding: .utf8), text.hasPrefix("0") else {
@@ -456,10 +488,11 @@ final class BattleSocketClient {
             }
             config.httpAdditionalHeaders = additionalHeaders
 
+            cleanupSocketOnly()
+
             let session = URLSession(configuration: config)
             let ws = session.webSocketTask(with: wsURL)
             self.webSocket = ws
-            self.isConnecting = false
             ws.resume()
 
             self.startReading()
@@ -469,26 +502,7 @@ final class BattleSocketClient {
 
         } catch {
             self.isConnecting = false
-            self.connectDirectFallback()
         }
-    }
-
-    private func connectDirectFallback() {
-        guard let url = URL(string: "wss://aptirush.onrender.com/socket.io/?EIO=4&transport=websocket") else { return }
-
-        let config = URLSessionConfiguration.default
-        config.httpAdditionalHeaders = [
-            "Origin": "https://aptirush.onrender.com",
-            "Referer": "https://aptirush.onrender.com",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
-        ]
-        let session = URLSession(configuration: config)
-        let ws = session.webSocketTask(with: url)
-        self.webSocket = ws
-        ws.resume()
-
-        startReading()
-        startPingTimer()
     }
 
     private func cleanupSocketOnly() {
@@ -504,6 +518,20 @@ final class BattleSocketClient {
         isConnecting = false
         cleanupSocketOnly()
         onDisconnect?()
+
+        // Auto-reconnect if battle or search in progress
+        if activeBattleId != nil {
+            scheduleReconnect()
+        }
+    }
+
+    private func scheduleReconnect() {
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard let self, !self.isConnected, !self.isConnecting, self.activeBattleId != nil else { return }
+            self.connect()
+        }
     }
 
     func emit(event: String, payload: [String: Any]) {
@@ -577,11 +605,22 @@ final class BattleSocketClient {
             webSocket?.send(.string("5")) { _ in }
             webSocket?.send(.string("40")) { _ in }
         } else if text.hasPrefix("0") {
+            // Engine.IO handshake response -> acknowledge Socket.IO
             webSocket?.send(.string("40")) { _ in }
         } else if text.hasPrefix("40") {
             isConnected = true
-            flushPendingEmits()
+            isConnecting = false
+            reconnectTask?.cancel()
+            reconnectTask = nil
             onConnect?()
+            // Auto-rejoin active battle on reconnect
+            if let bId = activeBattleId, let uId = currentUserId {
+                sendPacket(event: "join_battle", payload: [
+                    "battleId": bId,
+                    "userId": uId
+                ])
+            }
+            flushPendingEmits()
         } else if text.hasPrefix("2") {
             webSocket?.send(.string("3")) { _ in }
         } else if text.hasPrefix("42") {
@@ -768,6 +807,8 @@ final class BattleLobbyViewModel {
         startSearchTimer()
 
         bindSocketHandlers()
+        socket.currentUserId = userId
+        socket.connect()
         socket.emit(event: "join_queue", payload: ["userId": userId])
     }
 
@@ -788,6 +829,8 @@ final class BattleLobbyViewModel {
         isPractice = false
 
         bindSocketHandlers()
+        socket.currentUserId = userId
+        socket.connect()
         socket.emit(event: "create_private_room", payload: ["userId": userId])
 
         Task { [weak self] in
@@ -823,6 +866,8 @@ final class BattleLobbyViewModel {
         isPractice = false
 
         bindSocketHandlers()
+        socket.currentUserId = userId
+        socket.connect()
         socket.emit(event: "join_private_room", payload: [
             "userId": userId,
             "roomId": code,
@@ -975,6 +1020,7 @@ final class BattleRoomViewModel {
     private let socket = BattleSocketClient.shared
     private var botTask: Task<Void, Never>?
     private var autoAdvanceTask: Task<Void, Never>?
+    private var answerWatchdogTask: Task<Void, Never>?
 
     init(battle: BattleData, currentUserId: String, opponentName: String = "Opponent", isPractice: Bool = false) {
         self.battle = battle
@@ -987,6 +1033,8 @@ final class BattleRoomViewModel {
         if isPractice {
             startPracticeMode()
         } else {
+            socket.activeBattleId = battle.battleId
+            socket.currentUserId = currentUserId
             setupLiveSocket()
         }
     }
@@ -1017,6 +1065,7 @@ final class BattleRoomViewModel {
                     } else {
                         self.roundStatus = .bothMissed
                     }
+                    self.scheduleAutoAdvance(afterSeconds: 1.8)
                 } else {
                     self.roundStatus = .idle
                 }
@@ -1025,6 +1074,9 @@ final class BattleRoomViewModel {
 
         socket.onQuestionResolved = { [weak self] resolved in
             guard let self else { return }
+            self.answerWatchdogTask?.cancel()
+            self.answerWatchdogTask = nil
+
             self.p1Score = resolved.p1Score
             self.p2Score = resolved.p2Score
             self.isLocked = true
@@ -1036,13 +1088,14 @@ final class BattleRoomViewModel {
                 self.roundStatus = .bothMissed
             }
 
-            self.scheduleAutoAdvance(afterSeconds: 2.2)
+            self.scheduleAutoAdvance(afterSeconds: 1.8)
         }
 
         socket.onAnswerIncorrect = { [weak self] in
             guard let self else { return }
             self.isLocked = true
             self.roundStatus = .myAnswerWrong
+            self.armSyncWatchdog(afterSeconds: 4.0)
         }
 
         socket.onOpponentMissed = { [weak self] in
@@ -1056,6 +1109,8 @@ final class BattleRoomViewModel {
             guard let self else { return }
             self.autoAdvanceTask?.cancel()
             self.autoAdvanceTask = nil
+            self.answerWatchdogTask?.cancel()
+            self.answerWatchdogTask = nil
 
             if next.currentQIndex > self.currentQIndex {
                 self.advanceToQuestion(index: next.currentQIndex, p1: next.p1Score, p2: next.p2Score)
@@ -1069,6 +1124,8 @@ final class BattleRoomViewModel {
             guard let self else { return }
             self.autoAdvanceTask?.cancel()
             self.autoAdvanceTask = nil
+            self.answerWatchdogTask?.cancel()
+            self.answerWatchdogTask = nil
             self.p1Score = completed.p1Score
             self.p2Score = completed.p2Score
             self.winnerId = completed.winnerId
@@ -1081,6 +1138,20 @@ final class BattleRoomViewModel {
             "battleId": battle.battleId,
             "userId": currentUserId
         ])
+    }
+
+    private func armSyncWatchdog(afterSeconds: Double) {
+        answerWatchdogTask?.cancel()
+        answerWatchdogTask = Task { [weak self] in
+            let nanos = UInt64(afterSeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+            guard let self, !Task.isCancelled, !self.isCompleted else { return }
+            // Force state resync with server if round has not advanced
+            self.socket.emit(event: "join_battle", payload: [
+                "battleId": self.battle.battleId,
+                "userId": self.currentUserId
+            ])
+        }
     }
 
     private func scheduleAutoAdvance(afterSeconds: Double) {
@@ -1096,6 +1167,11 @@ final class BattleRoomViewModel {
     }
 
     private func advanceToQuestion(index: Int, p1: Int, p2: Int) {
+        self.autoAdvanceTask?.cancel()
+        self.autoAdvanceTask = nil
+        self.answerWatchdogTask?.cancel()
+        self.answerWatchdogTask = nil
+
         self.p1Score = p1
         self.p2Score = p2
         self.currentQIndex = index
@@ -1128,6 +1204,26 @@ final class BattleRoomViewModel {
                 "optionKey": key,
                 "questionIndex": currentQIndex
             ])
+
+            // Safety watchdog: re-sync state if server does not respond within 3.5s
+            answerWatchdogTask?.cancel()
+            answerWatchdogTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                guard let self, !Task.isCancelled, !self.isCompleted else { return }
+
+                self.socket.emit(event: "join_battle", payload: [
+                    "battleId": self.battle.battleId,
+                    "userId": self.currentUserId
+                ])
+
+                // If still stuck after another 3.5s (7.0s total) and locked out, advance safely
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                guard !Task.isCancelled, !self.isCompleted else { return }
+                if self.isLocked && self.roundStatus != .idle {
+                    let nextIndex = self.currentQIndex + 1
+                    self.advanceToQuestion(index: nextIndex, p1: self.p1Score, p2: self.p2Score)
+                }
+            }
         }
     }
 
@@ -1215,6 +1311,8 @@ final class BattleRoomViewModel {
     func cleanup() {
         botTask?.cancel()
         autoAdvanceTask?.cancel()
+        answerWatchdogTask?.cancel()
+        socket.activeBattleId = nil
         socket.onBattleSync = nil
         socket.onQuestionResolved = nil
         socket.onAnswerIncorrect = nil
