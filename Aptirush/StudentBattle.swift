@@ -400,36 +400,8 @@ final class BattleSocketClient {
 
         cleanupSocketOnly()
 
-        // Ultra-low latency: connect directly via WebSocket first
-        connectDirect()
-    }
-
-    private func connectDirect() {
-        guard let url = URL(string: "wss://aptirush.onrender.com/socket.io/?EIO=4&transport=websocket") else {
-            isConnecting = false
-            return
-        }
-
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        config.httpAdditionalHeaders = [
-            "Origin": "https://aptirush.onrender.com",
-            "Referer": "https://aptirush.onrender.com",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
-        ]
-        let session = URLSession(configuration: config)
-        let ws = session.webSocketTask(with: url)
-        self.webSocket = ws
-        ws.resume()
-
-        startReading()
-        startPingTimer()
-
-        // Fallback to polling handshake if direct WebSocket does not connect within 3.5 seconds
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_500_000_000)
-            guard let self, self.isConnecting, !self.isConnected else { return }
-            await self.performHandshakeAndConnect()
+            await self?.performHandshakeAndConnect()
         }
     }
 
@@ -444,7 +416,7 @@ final class BattleSocketClient {
             request.setValue("https://aptirush.onrender.com", forHTTPHeaderField: "Origin")
             request.setValue("https://aptirush.onrender.com", forHTTPHeaderField: "Referer")
             request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
-            request.timeoutInterval = 10
+            request.timeoutInterval = 8
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let text = String(data: data, encoding: .utf8), text.hasPrefix("0") else {
@@ -502,6 +474,11 @@ final class BattleSocketClient {
 
         } catch {
             self.isConnecting = false
+            self.cleanupSocketOnly()
+            self.onDisconnect?()
+            if self.activeBattleId != nil || !self.pendingEmits.isEmpty {
+                self.scheduleReconnect()
+            }
         }
     }
 
@@ -519,8 +496,8 @@ final class BattleSocketClient {
         cleanupSocketOnly()
         onDisconnect?()
 
-        // Auto-reconnect if battle or search in progress
-        if activeBattleId != nil {
+        // Auto-reconnect if battle or pending action in progress
+        if activeBattleId != nil || !pendingEmits.isEmpty {
             scheduleReconnect()
         }
     }
@@ -528,8 +505,8 @@ final class BattleSocketClient {
     private func scheduleReconnect() {
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            guard let self, !self.isConnected, !self.isConnecting, self.activeBattleId != nil else { return }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard let self, !self.isConnected, !self.isConnecting, (self.activeBattleId != nil || !self.pendingEmits.isEmpty) else { return }
             self.connect()
         }
     }
@@ -1053,10 +1030,9 @@ final class BattleRoomViewModel {
             self.p1Score = sync.p1Score
             self.p2Score = sync.p2Score
 
-            if sync.currentQIndex != self.currentQIndex {
+            if sync.currentQIndex > self.currentQIndex {
                 self.advanceToQuestion(index: sync.currentQIndex, p1: sync.p1Score, p2: sync.p2Score)
-            } else {
-                self.isLocked = sync.isLocked
+            } else if sync.currentQIndex == self.currentQIndex {
                 if sync.questionClaimed {
                     if sync.claimedBy == self.currentUserId {
                         self.roundStatus = .claimedByMe
@@ -1065,9 +1041,14 @@ final class BattleRoomViewModel {
                     } else {
                         self.roundStatus = .bothMissed
                     }
-                    self.scheduleAutoAdvance(afterSeconds: 1.8)
+                    self.isLocked = true
+                    self.scheduleAutoAdvance(afterSeconds: 1.5)
                 } else {
-                    self.roundStatus = .idle
+                    if !sync.isLocked {
+                        self.isLocked = false
+                        self.roundStatus = .idle
+                        self.selectedOptionKey = nil
+                    }
                 }
             }
         }
@@ -1088,6 +1069,8 @@ final class BattleRoomViewModel {
                 self.roundStatus = .bothMissed
             }
 
+            // Low-latency transition: server advances after 1.2s.
+            // Client auto-advances at 1.8s if server next_question packet is delayed.
             self.scheduleAutoAdvance(afterSeconds: 1.8)
         }
 
@@ -1095,12 +1078,12 @@ final class BattleRoomViewModel {
             guard let self else { return }
             self.isLocked = true
             self.roundStatus = .myAnswerWrong
-            self.armSyncWatchdog(afterSeconds: 4.0)
+            self.armSyncWatchdog(afterSeconds: 3.5)
         }
 
         socket.onOpponentMissed = { [weak self] in
             guard let self else { return }
-            if self.roundStatus == .idle {
+            if self.roundStatus == .idle && !self.isLocked {
                 self.roundStatus = .opponentMissed
             }
         }
@@ -1109,15 +1092,7 @@ final class BattleRoomViewModel {
             guard let self else { return }
             self.autoAdvanceTask?.cancel()
             self.autoAdvanceTask = nil
-            self.answerWatchdogTask?.cancel()
-            self.answerWatchdogTask = nil
-
-            if next.currentQIndex > self.currentQIndex {
-                self.advanceToQuestion(index: next.currentQIndex, p1: next.p1Score, p2: next.p2Score)
-            } else {
-                self.p1Score = next.p1Score
-                self.p2Score = next.p2Score
-            }
+            self.advanceToQuestion(index: next.currentQIndex, p1: next.p1Score, p2: next.p2Score)
         }
 
         socket.onBattleCompleted = { [weak self] completed in
@@ -1146,11 +1121,19 @@ final class BattleRoomViewModel {
             let nanos = UInt64(afterSeconds * 1_000_000_000)
             try? await Task.sleep(nanoseconds: nanos)
             guard let self, !Task.isCancelled, !self.isCompleted else { return }
-            // Force state resync with server if round has not advanced
+
             self.socket.emit(event: "join_battle", payload: [
                 "battleId": self.battle.battleId,
                 "userId": self.currentUserId
             ])
+
+            // If still locked out after another 2.5s and round not idle, advance safely
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled, !self.isCompleted else { return }
+            if self.isLocked && self.roundStatus != .idle {
+                let nextIndex = self.currentQIndex + 1
+                self.advanceToQuestion(index: nextIndex, p1: self.p1Score, p2: self.p2Score)
+            }
         }
     }
 
@@ -1174,10 +1157,16 @@ final class BattleRoomViewModel {
 
         self.p1Score = p1
         self.p2Score = p2
-        self.currentQIndex = index
-        self.selectedOptionKey = nil
-        self.isLocked = false
-        self.roundStatus = .idle
+
+        if index != self.currentQIndex {
+            self.currentQIndex = index
+            self.selectedOptionKey = nil
+            self.isLocked = false
+            self.roundStatus = .idle
+        } else if self.isLocked && self.roundStatus != .idle && self.selectedOptionKey == nil {
+            self.isLocked = false
+            self.roundStatus = .idle
+        }
 
         if index >= self.battle.questions.count {
             self.isCompleted = true
@@ -1205,25 +1194,8 @@ final class BattleRoomViewModel {
                 "questionIndex": currentQIndex
             ])
 
-            // Safety watchdog: re-sync state if server does not respond within 3.5s
-            answerWatchdogTask?.cancel()
-            answerWatchdogTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-                guard let self, !Task.isCancelled, !self.isCompleted else { return }
-
-                self.socket.emit(event: "join_battle", payload: [
-                    "battleId": self.battle.battleId,
-                    "userId": self.currentUserId
-                ])
-
-                // If still stuck after another 3.5s (7.0s total) and locked out, advance safely
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-                guard !Task.isCancelled, !self.isCompleted else { return }
-                if self.isLocked && self.roundStatus != .idle {
-                    let nextIndex = self.currentQIndex + 1
-                    self.advanceToQuestion(index: nextIndex, p1: self.p1Score, p2: self.p2Score)
-                }
-            }
+            // Safety watchdog: re-sync state if server does not respond within 2.5s
+            armSyncWatchdog(afterSeconds: 2.5)
         }
     }
 
